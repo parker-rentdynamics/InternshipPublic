@@ -1,0 +1,44 @@
+--MASTER COMMUNITY INFO (RP)--
+SELECT cl.id                                                                 AS "ClientID",
+       cl.name                                                               AS "ClientName",
+       c.id                                                                  AS "CommunityID",
+       c.name                                                                AS "CommunityName",
+       SUM(CASE WHEN c.lead_management IS TRUE THEN 1 ELSE 0 END)            AS "LMActive",
+       SUM(CASE WHEN c.rent_plus IS TRUE THEN 1 ELSE 0 END)                  AS "RPActive",
+       SUM(CASE WHEN c.is_manual_subscription IS TRUE THEN 1 ELSE 0 END)     AS "IsManual",
+       SUM(CASE WHEN cp.auto_enroll IS TRUE THEN 1 ELSE 0 END)               AS "AutoEnroll",
+       SUM(CASE WHEN cp.auto_enroll IS FALSE THEN 1 ELSE 0 END)              AS "OptIn",
+       SUM(CASE WHEN cp.rent_reporting IS TRUE THEN 1 ELSE 0 END)            AS "RentReportingActive",
+       SUM(CASE WHEN cp.utility_reporting IS TRUE THEN 1 ELSE 0 END)         AS "UtilityReportingActive",
+       SUM(CASE WHEN cf.trial IS NOT NULL THEN 1 ELSE 0 END)                 AS "HasTrial",
+       "Trials"."MaxTrial" AS "MaxTrial",
+       SUM(CASE WHEN cf.roommates_require_primary IS TRUE THEN 1 ELSE 0 END) AS "RoommateReqPrimaryActive",
+       SUM(CASE WHEN cf.bulk_email IS TRUE THEN 1 ELSE 0 END)                AS "BulkEmailAcive",
+       cp.auto_enroll_start_date
+  AS "Auto Enroll Start Date",
+  CASE
+           WHEN cc.rent_plus_billed_by = 'conservice' THEN 'Conservice'
+           WHEN cc.rent_plus_billed_by = 'rp_push_charges' THEN 'Push Charges'
+           WHEN cc.rent_plus_billed_by = 'community' THEN 'Community'
+            WHEN cc.rent_plus_billed_by = 'rent_dynamics' THEN 'Chargebee'
+           ELSE cc.rent_plus_billed_by END                                   AS "RPBilledBy",
+    SUM(CASE WHEN crp.transunion_active IS TRUE THEN 1 ELSE 0 END)                 AS "TransUnionActive",
+       SUM(CASE WHEN crp.transunion_rent_filing_number IS NOT NULL THEN 1 ELSE 0 END) AS "HasTURentFileNum",
+       SUM(CASE WHEN ec.rental_active IS TRUE THEN 1 ELSE 0 END) AS "EquifaxRentalActive",
+       SUM(CASE WHEN ec.rental_member_number IS NOT NULL THEN 1 ELSE 0 END) AS "HasEquifaxRentNum",
+       SUM(CASE WHEN crp.experian_active IS TRUE THEN 1 ELSE 0 END)                   AS "ExperianActive"
+FROM community c
+         JOIN client cl on c.client_id = cl.id
+         LEFT JOIN equifax_client ec on cl.id = ec.client_id
+         JOIN property_management_system_type pmst on c.property_management_system_type_id = pmst.id
+         LEFT JOIN community_profile cp ON cp.rd_community_id = c.id
+         LEFT JOIN community_features cf ON cf.rd_community_id = c.id
+         LEFT JOIN community_charge cc ON c.id = cc.community_id
+         LEFT JOIN community_reporting_property crp on c.id = crp.community_id
+         LEFT JOIN LATERAL (SELECT cf1.rd_community_id, MAX(cf1.trial) AS "MaxTrial"
+                            FROM community_features cf1
+                            WHERE cf1.rd_community_id = c.id
+                            GROUP BY cf1.rd_community_id
+                            ORDER BY 1 ASC) AS "Trials" ON TRUE
+GROUP BY cl.id, cl.name, c.id, c.name, cp.auto_enroll_start_date, cc.rent_plus_billed_by, "Trials"."MaxTrial"
+ORDER BY cl.id, c.id ASC;
